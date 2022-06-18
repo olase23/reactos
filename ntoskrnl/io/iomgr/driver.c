@@ -5,7 +5,7 @@
  * PURPOSE:         Driver Object Management
  * PROGRAMMERS:     Alex Ionescu (alex.ionescu@reactos.org)
  *                  Filip Navara (navaraf@reactos.org)
- *                  Hervé Poussineau (hpoussin@reactos.org)
+ *                  Hervï¿½ Poussineau (hpoussin@reactos.org)
  */
 
 /* INCLUDES *******************************************************************/
@@ -561,6 +561,7 @@ IopInitializeDriverModule(
         ExFreePoolWithTag(nameInfo, TAG_IO);
         RtlFreeUnicodeString(&ServiceName);
         RtlFreeUnicodeString(&DriverName);
+        MmUnloadSystemImage(ModuleObject);
         return Status;
     }
 
@@ -580,6 +581,7 @@ IopInitializeDriverModule(
         ExFreePoolWithTag(nameInfo, TAG_IO); // container for RegistryPath
         RtlFreeUnicodeString(&ServiceName);
         RtlFreeUnicodeString(&DriverName);
+        MmUnloadSystemImage(ModuleObject);
         return Status;
     }
 
@@ -598,6 +600,7 @@ IopInitializeDriverModule(
         ExFreePoolWithTag(nameInfo, TAG_IO); // container for RegistryPath
         RtlFreeUnicodeString(&ServiceName);
         RtlFreeUnicodeString(&DriverName);
+        MmUnloadSystemImage(ModuleObject);
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
@@ -620,6 +623,7 @@ IopInitializeDriverModule(
         ObDereferenceObject(driverObject);
         ExFreePoolWithTag(nameInfo, TAG_IO); // container for RegistryPath
         RtlFreeUnicodeString(&DriverName);
+        MmUnloadSystemImage(ModuleObject);
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
