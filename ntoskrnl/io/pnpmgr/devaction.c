@@ -248,12 +248,12 @@ IopCreateDeviceInstancePath(
 
     DPRINT("Sending IRP_MN_QUERY_CAPABILITIES to device stack (after enumeration)\n");
 
-    Status = IopQueryDeviceCapabilities(DeviceNode, &DeviceCapabilities);
+    Status = PiIrpQueryPnPDeviceCapabilities(DeviceNode, &DeviceCapabilities);
     if (!NT_SUCCESS(Status))
     {
         if (Status != STATUS_NOT_SUPPORTED)
         {
-            DPRINT1("IopQueryDeviceCapabilities() failed (Status 0x%08lx)\n", Status);
+            DPRINT1("PiIrpQueryPnPDeviceCapabilities() failed (Status 0x%08lx)\n", Status);
         }
         RtlFreeUnicodeString(&DeviceId);
         return Status;
@@ -851,39 +851,12 @@ Cleanup:
 
 NTSTATUS
 NTAPI
-IopQueryDeviceCapabilities(PDEVICE_NODE DeviceNode,
+PiSetDeviceCapabilities(PDEVICE_NODE DeviceNode,
                            PDEVICE_CAPABILITIES DeviceCaps)
 {
-    IO_STATUS_BLOCK StatusBlock;
-    IO_STACK_LOCATION Stack;
     NTSTATUS Status;
     HANDLE InstanceKey;
     UNICODE_STRING ValueName;
-
-    /* Set up the Header */
-    RtlZeroMemory(DeviceCaps, sizeof(DEVICE_CAPABILITIES));
-    DeviceCaps->Size = sizeof(DEVICE_CAPABILITIES);
-    DeviceCaps->Version = 1;
-    DeviceCaps->Address = -1;
-    DeviceCaps->UINumber = -1;
-
-    /* Set up the Stack */
-    RtlZeroMemory(&Stack, sizeof(IO_STACK_LOCATION));
-    Stack.Parameters.DeviceCapabilities.Capabilities = DeviceCaps;
-
-    /* Send the IRP */
-    Status = IopInitiatePnpIrp(DeviceNode->PhysicalDeviceObject,
-                               &StatusBlock,
-                               IRP_MN_QUERY_CAPABILITIES,
-                               &Stack);
-    if (!NT_SUCCESS(Status))
-    {
-        if (Status != STATUS_NOT_SUPPORTED)
-        {
-            DPRINT1("IRP_MN_QUERY_CAPABILITIES failed with status 0x%lx\n", Status);
-        }
-        return Status;
-    }
 
     /* Map device capabilities to capability flags */
     DeviceNode->CapabilityFlags = 0;
@@ -954,7 +927,7 @@ IopQueryDeviceCapabilities(PDEVICE_NODE DeviceNode,
 
 static
 NTSTATUS
-IopQueryHardwareIds(PDEVICE_NODE DeviceNode,
+PiSetHardwareIds(PDEVICE_NODE DeviceNode,
                     HANDLE InstanceKey)
 {
     IO_STACK_LOCATION Stack;
@@ -1019,7 +992,7 @@ IopQueryHardwareIds(PDEVICE_NODE DeviceNode,
 
 static
 NTSTATUS
-IopQueryCompatibleIds(PDEVICE_NODE DeviceNode,
+PiSetCompatibleIds(PDEVICE_NODE DeviceNode,
                       HANDLE InstanceKey)
 {
     IO_STACK_LOCATION Stack;
@@ -1195,9 +1168,10 @@ PiInitializeDevNode(
     HANDLE InstanceKey = NULL;
     UNICODE_STRING InstancePathU;
     PDEVICE_OBJECT OldDeviceObject;
+    DEVICE_CAPABILITIES DeviceCaps;
 
-    DPRINT("PiProcessNewDevNode(%p)\n", DeviceNode);
-    DPRINT("PDO 0x%p\n", DeviceNode->PhysicalDeviceObject);
+    DPRINT1("PiProcessNewDevNode(%p)\n", DeviceNode);
+    DPRINT1("PDO 0x%p\n", DeviceNode->PhysicalDeviceObject);
 
     /*
      * FIXME: For critical errors, cleanup and disable device, but always
@@ -1247,9 +1221,18 @@ PiInitializeDevNode(
         return STATUS_SUCCESS;
     }
 
-    IopQueryHardwareIds(DeviceNode, InstanceKey);
+    /*
+     * Query device capabilities and save them if there are some.
+     */
+    Status = PiIrpQueryPnPDeviceCapabilities(DeviceNode, &DeviceCaps);
+    if (NT_SUCCESS(Status))
+    {
+        PiSetDeviceCapabilities(DeviceNode, &DeviceCaps);
+    }
 
-    IopQueryCompatibleIds(DeviceNode, InstanceKey);
+    PiSetHardwareIds(DeviceNode, InstanceKey);
+
+    PiSetCompatibleIds(DeviceNode, InstanceKey);
 
     DeviceNode->Flags |= DNF_IDS_QUERIED;
 
@@ -1600,8 +1583,8 @@ PiStartDeviceFinal(
             return Status;
         }
 
-        IopQueryHardwareIds(DeviceNode, instanceHandle);
-        IopQueryCompatibleIds(DeviceNode, instanceHandle);
+        PiSetHardwareIds(DeviceNode, instanceHandle);
+        PiSetCompatibleIds(DeviceNode, instanceHandle);
 
         DeviceNode->Flags |= DNF_IDS_QUERIED;
         ZwClose(instanceHandle);
@@ -1612,10 +1595,12 @@ PiStartDeviceFinal(
 
     DPRINT("Sending IRP_MN_QUERY_CAPABILITIES to device stack (after start)\n");
 
-    Status = IopQueryDeviceCapabilities(DeviceNode, &DeviceCapabilities);
-    if (!NT_SUCCESS(Status))
+    Status = PiIrpQueryPnPDeviceCapabilities(DeviceNode, &DeviceCapabilities);
+    if (NT_SUCCESS(Status))
     {
-        DPRINT("IopInitiatePnpIrp() failed (Status 0x%08lx)\n", Status);
+        PiSetDeviceCapabilities(DeviceNode, &DeviceCapabilities);
+    } else {
+        DPRINT("PiIrpQueryPnPDeviceCapabilities() failed (Status 0x%08lx)\n", Status);
     }
 
     // Query the device state (IRP_MN_QUERY_PNP_DEVICE_STATE)
@@ -2212,7 +2197,7 @@ IoRequestDeviceEject(IN PDEVICE_OBJECT PhysicalDeviceObject)
     IopQueueTargetDeviceEvent(&GUID_DEVICE_KERNEL_INITIATED_EJECT,
                               &DeviceNode->InstancePath);
 
-    if (IopQueryDeviceCapabilities(DeviceNode, &Capabilities) != STATUS_SUCCESS)
+    if (PiIrpQueryPnPDeviceCapabilities(DeviceNode, &Capabilities) != STATUS_SUCCESS)
     {
         goto cleanup;
     }

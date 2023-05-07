@@ -629,7 +629,7 @@ IopFreeDeviceNode(
 
 NTSTATUS
 NTAPI
-IopQueryDeviceCapabilities(PDEVICE_NODE DeviceNode,
+PiSetDeviceCapabilities(PDEVICE_NODE DeviceNode,
                            PDEVICE_CAPABILITIES DeviceCaps);
 
 NTSTATUS
@@ -1425,6 +1425,11 @@ NTSTATUS
 PiIrpQueryPnPDeviceState(
     _In_ PDEVICE_NODE DeviceNode,
     _Out_ PPNP_DEVICE_STATE DeviceState);
+
+NTSTATUS
+PiIrpQueryPnPDeviceCapabilities(
+    _In_ PDEVICE_NODE DeviceNode,
+    _Out_ PDEVICE_CAPABILITIES DeviceCaps);
 
 //
 // Global I/O Data
